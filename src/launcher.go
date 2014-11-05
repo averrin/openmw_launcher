@@ -10,38 +10,59 @@ import (
 	"log"
 	"path"
 	"os/exec"
+	"constants"
 )
-func main() {
+
+type Options struct {
+	LocalVersion string
+	RemoteVersion string
+	DataPath string
+	CWD string
+}
+
+func (o *Options) IsLatest() bool {
+	return o.LocalVersion == o.RemoteVersion
+}
+
+func NewOptions() (o *Options) {
+	o = new(Options)
 	re := regexp.MustCompile(`Version: ([\d\.]+)`)
-	cwd, _ := os.Getwd()
-	fmt.Println(cwd)
+	o.CWD, _ = os.Getwd()
 	buf, _ := ioutil.ReadFile("readme.txt")
-	local_version := re.FindStringSubmatch(string(buf))[1]
-	fmt.Println(local_version)
-	resp, _ := http.Get("https://raw.githubusercontent.com/OpenMW/openmw/master/readme.txt")
+	o.LocalVersion = re.FindStringSubmatch(string(buf))[1]
+
+	resp, _ := http.Get(constants.RemoteReadmeUrl)
 	defer resp.Body.Close()
 	body, _ := ioutil.ReadAll(resp.Body)
-	remote_version := re.FindStringSubmatch(string(body))[1]
-	fmt.Println(remote_version)
+	o.RemoteVersion = re.FindStringSubmatch(string(body))[1]
 
-	usr, err := user.Current()
-	if err != nil {
-		log.Fatal( err )
-	}
-	settings_folder := path.Join(usr.HomeDir, "Documents/My Games/OpenMW" )
+	usr, _ := user.Current()
+	settings_folder := path.Join(usr.HomeDir, constants.OpenMWSettingsDir )
 	settings_file := path.Join(settings_folder, "openmw.cfg")
 	buf, _ = ioutil.ReadFile(settings_file)
 	data_re := regexp.MustCompile(`data="(.+)"`)
-	data_path := data_re.FindStringSubmatch(string(buf))[1]
-	fmt.Println(data_path)
+	o.DataPath = data_re.FindStringSubmatch(string(buf))[1]
 
-	cmd := exec.Command("openmw.exe")
-	err = cmd.Start()
+	return o
+}
+
+func StartOpenMW() {
+	cmd := exec.Command(constants.OpenMWExec)
+	err := cmd.Start()
 	if err != nil {
 		log.Fatal(err)
 	}
 	log.Printf("Waiting for command to finish...")
 	err = cmd.Wait()
 	log.Printf("Command finished with error: %v", err)
+}
+
+func main() {
+
+	options := NewOptions()
+	fmt.Println(options)
+	fmt.Println(options.IsLatest())
+
+//	StartOpenMW()
 
 }
