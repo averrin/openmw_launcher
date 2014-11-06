@@ -26,20 +26,27 @@ func (o *Options) IsLatest() bool {
 
 func NewOptions() (o *Options) {
 	o = new(Options)
-	re := regexp.MustCompile(`Version: ([\d\.]+)`)
+	re := regexp.MustCompile(`OpenMW version ([\d\.]+)`)
 	o.CWD, _ = os.Getwd()
-	buf, _ := ioutil.ReadFile("readme.txt")
-	o.LocalVersion = re.FindStringSubmatch(string(buf))[1]
+	
+//	buf, _ := ioutil.ReadFile("readme.txt")
+//	o.LocalVersion = re.FindStringSubmatch(string(buf))[1]
+
+	version, _ := exec.Command(constants.OpenMWExec, "--version").Output()
+	o.LocalVersion = re.FindStringSubmatch((string)(version))[1]
+	
 
 	resp, _ := http.Get(constants.RemoteReadmeUrl)
 	defer resp.Body.Close()
 	body, _ := ioutil.ReadAll(resp.Body)
+	re = regexp.MustCompile(`Version: ([\d\.]+)`)
 	o.RemoteVersion = re.FindStringSubmatch(string(body))[1]
 
 	usr, _ := user.Current()
+	println(usr.HomeDir)
 	settings_folder := path.Join(usr.HomeDir, constants.OpenMWSettingsDir )
 	settings_file := path.Join(settings_folder, "openmw.cfg")
-	buf, _ = ioutil.ReadFile(settings_file)
+	buf, _ := ioutil.ReadFile(settings_file)
 	data_re := regexp.MustCompile(`data="(.+)"`)
 	o.DataPath = data_re.FindStringSubmatch(string(buf))[1]
 
@@ -63,6 +70,6 @@ func main() {
 	fmt.Println(options)
 	fmt.Println(options.IsLatest())
 
-//	StartOpenMW()
+	StartOpenMW()
 
 }

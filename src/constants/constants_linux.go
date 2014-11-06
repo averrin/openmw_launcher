@@ -1,7 +1,7 @@
 package constants
 
 const (
-	OpenMWSettingsDir = ".OpenMW"
-	OpenMWExec = "openmw"
+	OpenMWSettingsDir = ".config/openmw/"
+	OpenMWExec = "/usr/games/openmw"
 )
 
