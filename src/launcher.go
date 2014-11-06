@@ -11,6 +11,9 @@ import (
 	"path"
 	"os/exec"
 	"constants"
+	"github.com/averrin/go-ini"
+	"path/filepath"
+	"strings"
 )
 
 type Options struct {
@@ -18,6 +21,8 @@ type Options struct {
 	RemoteVersion string
 	DataPath string
 	CWD string
+	LauncherConfig ini.File
+	OMWConfig ini.File	
 }
 
 func (o *Options) IsLatest() bool {
@@ -43,12 +48,12 @@ func NewOptions() (o *Options) {
 	o.RemoteVersion = re.FindStringSubmatch(string(body))[1]
 
 	usr, _ := user.Current()
-	println(usr.HomeDir)
-	settings_folder := path.Join(usr.HomeDir, constants.OpenMWSettingsDir )
-	settings_file := path.Join(settings_folder, "openmw.cfg")
-	buf, _ := ioutil.ReadFile(settings_file)
-	data_re := regexp.MustCompile(`data="(.+)"`)
-	o.DataPath = data_re.FindStringSubmatch(string(buf))[1]
+	settings_folder := path.Join(usr.HomeDir, constants.OpenMWSettingsDir)
+
+	o.LauncherConfig, _ = ini.LoadFile(path.Join(settings_folder, "launcher.cfg"))
+	o.OMWConfig, _ = ini.LoadFile(path.Join(settings_folder, "openmw.cfg"))
+	d, _ := o.OMWConfig.Get("", "data")
+	o.DataPath = strings.Trim(d.(string), `"`)
 
 	return o
 }
@@ -64,12 +69,46 @@ func StartOpenMW() {
 	log.Printf("Command finished with error: %v", err)
 }
 
+func Pos(value interface {}, slice []string) int {
+	for p, v := range slice {
+		if (v == value) {
+			return p
+		}
+	}
+	return -1
+}
+
 func main() {
 
 	options := NewOptions()
-	fmt.Println(options)
-	fmt.Println(options.IsLatest())
+//	fmt.Println(options)
+	profile, _ := options.LauncherConfig.Get("Profiles", "currentprofile")
+	content_files, _ := options.LauncherConfig.Get("Profiles", profile.(string))
+	switch content_files.(type){
+	case string:
+		content_files = []string{content_files.(string)}
+	}
+	fmt.Println(options.DataPath)
+	fmt.Printf("Content to load (%v):\n", profile)
+//	fmt.Println(options.IsLatest())
 
-	StartOpenMW()
+	p := path.Join(options.DataPath, "/*.esm")
+	files, _ := filepath.Glob(p)
+	available_content := make([]string, 0)
+	for _, f := range files {
+		_, c := path.Split(f)
+		available_content = append(available_content, c)
+	}
+
+	for _, f := range available_content{
+		if Pos(f, content_files.([]string)) != -1 {
+			fmt.Print(" [x] ")
+		} else {
+			fmt.Print(" [ ] ")
+		}
+		fmt.Println(f)
+	}
+
+//	StartOpenMW()
 
 }
