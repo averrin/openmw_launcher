@@ -5,5 +5,5 @@ const (
 	
 	RemoteReadmeUrl = "https://raw.githubusercontent.com/OpenMW/openmw/master/readme.txt"
 	LauncherVersionUrl = "https://raw.githubusercontent.com/averrin/openmw_launcher/master/src/constants/constants.go"
-	SiteUrl = "https://openmw.org/en/"
+	SiteUrl = "https://openmw.org"
 )

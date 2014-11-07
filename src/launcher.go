@@ -14,8 +14,10 @@ import (
 	"github.com/averrin/go-ini"
 	"path/filepath"
 	"strings"
-//	"gopkg.in/qml.v1"
+	"github.com/andlabs/ui"
 )
+
+var window ui.Window
 
 func Pos(value interface {}, slice []string) int {
 	for p, v := range slice {
@@ -130,12 +132,15 @@ func StartOpenMW(o *Options) {
 }
 
 func (o *Options)GetAvailableContentFiles() []string {
-	p := path.Join(o.DataPath, "/*.esm")          //TODO: add all tes content files
+	exts := []string{".esm", ".esp", ".omwgame", ".omwaddon"}
+	p := path.Join(o.DataPath, "*.*")          
 	files, _ := filepath.Glob(p)
 	available_content := make([]string, 0)
 	for _, f := range files {
 		_, c := path.Split(f)
-		available_content = append(available_content, c)
+		if Pos(path.Ext(c), exts) != -1 {
+			available_content = append(available_content, c)
+		}
 	}
 	return available_content
 }
@@ -157,12 +162,6 @@ func main() {
 		fmt.Println("Its a first run of OpenMW, please run official omwlauncher for setting Morrowind path and initial settings")
 		os.Exit(1)
 	}
-	go func() {
-		ver := options.FetchRemoteVersion()
-		if ver != options.LocalVersion {
-			println("Maybe new OpenMW version is available! Go to", constants.SiteUrl)
-		}
-	}()
 	profile := "new"
 	options.ChangeProfile(profile)
 	fmt.Println(options.DataPath)
@@ -177,5 +176,54 @@ func main() {
 		}
 		fmt.Println(f)
 	}
-	StartOpenMW(options)
+//	StartOpenMW(options)
+
+	go ui.Do(func() {
+		rv_label := ui.NewLabel("Available OpenMW: fetching...")
+		play_button := ui.NewButton("Play")
+//		profiles_combo := ui.New
+		layout := []ui.Control {
+			ui.NewLabel("Installed OpenMW: " + options.LocalVersion),
+			rv_label,
+		}
+//		profile, _ := options.LauncherConfig.Get("Profiles", "currentprofile")
+//		for _, p := range options.Profiles {
+//			c := ui.NewCheckbox(p)
+//			if p ==  profile.(string) {
+//				c.SetChecked(true)
+//			}
+//			c.OnToggled((func() {
+//				if !c.Checked() {
+//					c.SetChecked(true)
+//				}
+//			}))
+//			layout = append(layout, c)
+//		}
+		layout = append(layout, play_button)
+		stack := ui.NewVerticalStack(layout...)
+		window = ui.NewWindow("OpenMW Launcher", 200, 200, stack)
+		window.OnClosing(func() bool {
+			ui.Stop()
+			return true
+		})
+
+		play_button.OnClicked(func() {
+			StartOpenMW(options)
+		})
+		window.Show()
+
+		go func() {
+			ver := options.FetchRemoteVersion()
+			if !options.IsLatest() {
+				println("Maybe new OpenMW version is available! Go to", constants.SiteUrl)
+				rv_label.SetText(fmt.Sprintf("Available OpenMW: %v", ver ))
+			} else {
+				rv_label.SetText("You have latest version.")
+			}
+		}()
+	})
+	err := ui.Go()
+	if err != nil {
+		panic(err)
+	}
 }
