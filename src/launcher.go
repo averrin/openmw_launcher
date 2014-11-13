@@ -14,10 +14,8 @@ import (
 	"github.com/averrin/go-ini"
 	"path/filepath"
 	"strings"
-	"github.com/andlabs/ui"
+	"gopkg.in/qml.v1"
 )
-
-var window ui.Window
 
 func Pos(value interface {}, slice []string) int {
 	for p, v := range slice {
@@ -37,12 +35,41 @@ type Options struct {
 	LauncherConfig ini.File
 	OMWConfigPath string
 	OMWConfig ini.File	
-	Profiles []string
+	Profiles Profiles
+}
+
+type Profiles struct {
+	Options *Options
+	List []string
+	Current string
+}
+
+
+func (profiles *Profiles) Add(p string) {
+	profiles.List = append(profiles.List, p)
+	qml.Changed(profiles, profiles.Length())
+}
+
+func (profiles *Profiles) Length() int {
+	return len(profiles.List)
+}
+
+func (profiles *Profiles) At(index int) string {
+	return profiles.List[index]
+}
+
+func (profiles *Profiles) Select(index int) {
+	if index != -1 {
+		p := profiles.List[index]
+		profiles.Options.ChangeProfile(p)
+	}
 }
 
 func (o *Options) ChangeProfile(profile string) {
-	 if Pos(profile, o.Profiles) != -1 {
+	 if Pos(profile, o.Profiles.List) != -1 {
+		 println("Change profile to", profile)
 		 o.LauncherConfig["Profiles"]["currentprofile"] = profile
+		 o.Profiles.Current = profile
 		 o.LauncherConfig.SaveFile(o.LauncherConfigPath)
 
 		 content_files, _ := o.LauncherConfig.Get("Profiles", profile)
@@ -80,10 +107,13 @@ func NewOptions() (o *Options) {
 	d, _ := o.OMWConfig.Get("", "data")
 	o.DataPath = strings.Trim(d.(string), `"`)
 
-	o.Profiles = make([]string, 0, len(o.LauncherConfig["Profiles"]))
+	o.Profiles = Profiles{}
+	o.Profiles.Options = o
+	o.Profiles.Current = o.LauncherConfig["Profiles"]["currentprofile"].(string)
+	o.Profiles.List = make([]string, 0, len(o.LauncherConfig["Profiles"]))
 	for k := range o.LauncherConfig["Profiles"] {
 		if k != "currentprofile" {
-			o.Profiles = append(o.Profiles, k)
+			o.Profiles.List = append(o.Profiles.List, k)
 		}
 	}
 
@@ -117,7 +147,7 @@ func (o *Options)ImportMWINI() {
 	err = cmd.Wait()
 }
 
-func StartOpenMW(o *Options) {
+func (o *Options)StartOpenMW() {
 	arguments := make([]string, 0)
 
 	arguments = append(arguments, "--encoding");
@@ -155,6 +185,36 @@ func (o *Options)GetSelectedContentFiles() []string {
 	return content_files.([]string)
 }
 
+func run() error {
+	options := NewOptions()
+	engine := qml.NewEngine()
+	log.Println(options.Profiles)
+
+	controls, err := engine.LoadFile("src/main.qml")
+	if err != nil {
+		return err
+	}
+
+	context := engine.Context()
+	context.SetVars(options)
+	context.SetVar("ProfilesModel", &options.Profiles)
+	fmt.Println(options.Profiles.Current, options.Profiles.List)
+	ci := Pos(options.Profiles.Current, options.Profiles.List)
+	context.SetVar("CurrentProfile", ci)
+	window := controls.CreateWindow(nil)
+
+	window.Show()
+	
+	go func(){
+		options.FetchRemoteVersion()
+		println(options.RemoteVersion)
+		context.SetVar("remoteVersion", options.RemoteVersion)
+//		println(engine.ObjectByName("Rlabel"))
+	}()
+	window.Wait()
+	return nil
+}
+
 
 func main() {
 	options := NewOptions()
@@ -162,13 +222,10 @@ func main() {
 		fmt.Println("Its a first run of OpenMW, please run official omwlauncher for setting Morrowind path and initial settings")
 		os.Exit(1)
 	}
-	profile := "new"
-	options.ChangeProfile(profile)
-	fmt.Println(options.DataPath)
 	content_files := options.GetSelectedContentFiles()
 
-	fmt.Println("Starting with profile:", profile)
-	for _, f := range options.GetAvailableContentFiles(){
+//	fmt.Println("Starting with profile:", profile)
+	for _, f := range options.GetAvailableContentFiles() {
 		if Pos(f, content_files) != -1 {
 			fmt.Print(" [x] ")
 		} else {
@@ -176,54 +233,10 @@ func main() {
 		}
 		fmt.Println(f)
 	}
-//	StartOpenMW(options)
+	//	StartOpenMW(options)
 
-	go ui.Do(func() {
-		rv_label := ui.NewLabel("Available OpenMW: fetching...")
-		play_button := ui.NewButton("Play")
-//		profiles_combo := ui.New
-		layout := []ui.Control {
-			ui.NewLabel("Installed OpenMW: " + options.LocalVersion),
-			rv_label,
-		}
-//		profile, _ := options.LauncherConfig.Get("Profiles", "currentprofile")
-//		for _, p := range options.Profiles {
-//			c := ui.NewCheckbox(p)
-//			if p ==  profile.(string) {
-//				c.SetChecked(true)
-//			}
-//			c.OnToggled((func() {
-//				if !c.Checked() {
-//					c.SetChecked(true)
-//				}
-//			}))
-//			layout = append(layout, c)
-//		}
-		layout = append(layout, play_button)
-		stack := ui.NewVerticalStack(layout...)
-		window = ui.NewWindow("OpenMW Launcher", 200, 200, stack)
-		window.OnClosing(func() bool {
-			ui.Stop()
-			return true
-		})
-
-		play_button.OnClicked(func() {
-			StartOpenMW(options)
-		})
-		window.Show()
-
-		go func() {
-			ver := options.FetchRemoteVersion()
-			if !options.IsLatest() {
-				println("Maybe new OpenMW version is available! Go to", constants.SiteUrl)
-				rv_label.SetText(fmt.Sprintf("Available OpenMW: %v", ver ))
-			} else {
-				rv_label.SetText("You have latest version.")
-			}
-		}()
-	})
-	err := ui.Go()
-	if err != nil {
-		panic(err)
+	if err := qml.Run(run); err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
 	}
 }
