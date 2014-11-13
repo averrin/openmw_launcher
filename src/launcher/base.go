@@ -34,8 +34,9 @@ type Options struct {
 	LauncherConfigPath string
 	LauncherConfig ini.File
 	OMWConfigPath string
-	OMWConfig ini.File	
-	Profiles Profiles
+	OMWConfig ini.File
+	Profiles *Profiles
+	ContentFiles *ContentFiles
 }
 
 type Profiles struct {
@@ -62,24 +63,61 @@ func (profiles *Profiles) Select(index int) {
 	if index != -1 {
 		p := profiles.List[index]
 		profiles.Options.ChangeProfile(p)
+		profiles.Options.ContentFiles.Update()
+		fmt.Println(profiles.Options.ContentFiles.List, profiles.Options.ContentFiles.Length)
+		qml.Changed(profiles.Options.ContentFiles, &profiles.Options.ContentFiles.Length)
 	}
 }
 
-func (o *Options) ChangeProfile(profile string) {
-	 if Pos(profile, o.Profiles.List) != -1 {
-		 println("Change profile to", profile)
-		 o.LauncherConfig["Profiles"]["currentprofile"] = profile
-		 o.Profiles.Current = profile
-		 o.LauncherConfig.SaveFile(o.LauncherConfigPath)
+type ContentFiles struct {
+	Options *Options
+	List []string
+	Length  int
+}
 
-		 content_files, _ := o.LauncherConfig.Get("Profiles", profile)
-		 switch content_files.(type){
-		 case string:
-			 content_files = []string{content_files.(string)}
-		 }
-		 o.OMWConfig[""]["content"] = content_files
-		 o.OMWConfig.SaveFile(o.OMWConfigPath)
-	 }
+func (content *ContentFiles) Add(c string) {
+	content.List = append(content.List, c)
+	content.Length = len(content.List)
+	qml.Changed(content, &content.Length)
+}
+
+func (content *ContentFiles) Update() {
+	content.Clear()
+	o := content.Options
+	profile, _ := o.LauncherConfig.Get("Profiles", "currentprofile")
+	content_files, _ := o.LauncherConfig.Get("Profiles", profile.(string))
+	switch content_files.(type){
+	case string:
+		content_files = []string{content_files.(string)}
+	}
+	content.List = content_files.([]string)
+	content.Length = len(content_files.([]string))
+}
+
+func (content *ContentFiles) Clear() {
+	content.List = make([]string, 0)
+	content.Length = 0
+}
+
+func (content *ContentFiles) Text(index int) string {
+	return content.List[index]
+}
+
+func (o *Options) ChangeProfile(profile string) {
+	if Pos(profile, o.Profiles.List) != -1 {
+		println("Change profile to", profile)
+		o.LauncherConfig["Profiles"]["currentprofile"] = profile
+		o.Profiles.Current = profile
+		o.LauncherConfig.SaveFile(o.LauncherConfigPath)
+
+		content_files, _ := o.LauncherConfig.Get("Profiles", profile)
+		switch content_files.(type){
+		case string:
+			content_files = []string{content_files.(string)}
+		}
+		o.OMWConfig[""]["content"] = content_files
+		o.OMWConfig.SaveFile(o.OMWConfigPath)
+	}
 }
 
 func (o *Options) IsLatest() bool {
@@ -90,9 +128,6 @@ func NewOptions() (o *Options) {
 	o = new(Options)
 	re := regexp.MustCompile(`OpenMW version ([\d\.]+)`)
 	o.CWD, _ = os.Getwd()
-	
-//	buf, _ := ioutil.ReadFile("readme.txt")
-//	o.LocalVersion = re.FindStringSubmatch(string(buf))[1]
 
 	version, _ := exec.Command(constants.OpenMWExec, "--version").Output()
 	o.LocalVersion = re.FindStringSubmatch((string)(version))[1]
@@ -107,15 +142,8 @@ func NewOptions() (o *Options) {
 	d, _ := o.OMWConfig.Get("", "data")
 	o.DataPath = strings.Trim(d.(string), `"`)
 
-	o.Profiles = Profiles{}
-	o.Profiles.Options = o
-	o.Profiles.Current = o.LauncherConfig["Profiles"]["currentprofile"].(string)
-	o.Profiles.List = make([]string, 0, len(o.LauncherConfig["Profiles"]))
-	for k := range o.LauncherConfig["Profiles"] {
-		if k != "currentprofile" {
-			o.Profiles.List = append(o.Profiles.List, k)
-		}
-	}
+	o.Profiles = o.GetProfilesList()
+	o.ContentFiles = o.GetSelectedContentFiles()
 
 	return o
 }
@@ -154,16 +182,29 @@ func (o *Options)StartOpenMW() {
 	arguments = append(arguments, o.OMWConfig.GetWithDefault("", "encoding", "win1251").(string));
 	arguments = append(arguments, "--skip-menu=1");
 	arguments = append(arguments, "--new-game=1");
-	
+
 	cmd := exec.Command(constants.OpenMWExec, arguments...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Run()
 }
 
+func (o *Options)GetProfilesList() *Profiles {
+	p := new(Profiles)
+	p.Options = o
+	p.Current = o.LauncherConfig["Profiles"]["currentprofile"].(string)
+	p.List = make([]string, 0, len(o.LauncherConfig["Profiles"]))
+	for k := range o.LauncherConfig["Profiles"] {
+		if k != "currentprofile" {
+			p.List = append(p.List, k)
+		}
+	}
+	return p
+}
+
 func (o *Options)GetAvailableContentFiles() []string {
 	exts := []string{".esm", ".esp", ".omwgame", ".omwaddon"}
-	p := path.Join(o.DataPath, "*.*")          
+	p := path.Join(o.DataPath, "*.*")
 	files, _ := filepath.Glob(p)
 	available_content := make([]string, 0)
 	for _, f := range files {
@@ -175,68 +216,9 @@ func (o *Options)GetAvailableContentFiles() []string {
 	return available_content
 }
 
-func (o *Options)GetSelectedContentFiles() []string {
-	profile, _ := o.LauncherConfig.Get("Profiles", "currentprofile")
-	content_files, _ := o.LauncherConfig.Get("Profiles", profile.(string))
-	switch content_files.(type){
-	case string:
-		content_files = []string{content_files.(string)}
-	}
-	return content_files.([]string)
-}
-
-func run() error {
-	options := NewOptions()
-	engine := qml.NewEngine()
-	log.Println(options.Profiles)
-
-	controls, err := engine.LoadFile("src/main.qml")
-	if err != nil {
-		return err
-	}
-
-	context := engine.Context()
-	context.SetVars(options)
-	context.SetVar("ProfilesModel", &options.Profiles)
-	fmt.Println(options.Profiles.Current, options.Profiles.List)
-	ci := Pos(options.Profiles.Current, options.Profiles.List)
-	context.SetVar("CurrentProfile", ci)
-	window := controls.CreateWindow(nil)
-
-	window.Show()
-	
-	go func(){
-		options.FetchRemoteVersion()
-		println(options.RemoteVersion)
-		context.SetVar("remoteVersion", options.RemoteVersion)
-//		println(engine.ObjectByName("Rlabel"))
-	}()
-	window.Wait()
-	return nil
-}
-
-
-func main() {
-	options := NewOptions()
-	if options.LauncherConfig["General"]["firstrun"] == "true" {
-		fmt.Println("Its a first run of OpenMW, please run official omwlauncher for setting Morrowind path and initial settings")
-		os.Exit(1)
-	}
-	content_files := options.GetSelectedContentFiles()
-
-//	fmt.Println("Starting with profile:", profile)
-	for _, f := range options.GetAvailableContentFiles() {
-		if Pos(f, content_files) != -1 {
-			fmt.Print(" [x] ")
-		} else {
-			fmt.Print(" [ ] ")
-		}
-		fmt.Println(f)
-	}
-	//	StartOpenMW(options)
-
-	if err := qml.Run(run); err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		os.Exit(1)
-	}
+func (o *Options)GetSelectedContentFiles() *ContentFiles {
+	c := new(ContentFiles)
+	c.Options = o
+	c.Update()
+	return c
 }
