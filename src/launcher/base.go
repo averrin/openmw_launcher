@@ -14,7 +14,6 @@ import (
 	"github.com/averrin/go-ini"
 	"path/filepath"
 	"strings"
-	"gopkg.in/qml.v1"
 )
 
 func Pos(value interface {}, slice []string) int {
@@ -48,7 +47,6 @@ type Profiles struct {
 
 func (profiles *Profiles) Add(p string) {
 	profiles.List = append(profiles.List, p)
-	qml.Changed(profiles, profiles.Length())
 }
 
 func (profiles *Profiles) Length() int {
@@ -65,7 +63,6 @@ func (profiles *Profiles) Select(index int) {
 		profiles.Options.ChangeProfile(p)
 		profiles.Options.ContentFiles.Update()
 		fmt.Println(profiles.Options.ContentFiles.List, profiles.Options.ContentFiles.Length)
-		qml.Changed(profiles.Options.ContentFiles, &profiles.Options.ContentFiles.Length)
 	}
 }
 
@@ -78,7 +75,6 @@ type ContentFiles struct {
 func (content *ContentFiles) Add(c string) {
 	content.List = append(content.List, c)
 	content.Length = len(content.List)
-	qml.Changed(content, &content.Length)
 }
 
 func (content *ContentFiles) Update() {

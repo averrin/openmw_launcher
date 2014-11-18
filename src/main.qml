@@ -30,6 +30,7 @@ ApplicationWindow {
             
             ComboBox {
                 id: profilesBox
+                objectName : "profilesBox"
                property var pseudoModel: []
                model: pseudoModel
                Component.onCompleted: {
@@ -42,8 +43,9 @@ ApplicationWindow {
                    console.log(CurrentProfile)
                }
                onCurrentIndexChanged: {
+                    console.log(currentIndex)
                     profiles.select(currentIndex)
-                    console.log("Changed")
+                    console.log("Changed to", profilesLV.model)
                }
             }
             
@@ -63,6 +65,8 @@ ApplicationWindow {
             anchors.right: parent.right
             
             ListView {
+                id: profilesLV
+                objectName: "model"
                 width: 120;
                 model: contentFiles.length
                 delegate: Text {
@@ -71,7 +75,6 @@ ApplicationWindow {
                 anchors.top: parent.top
                 anchors.bottom: parent.bottom
                 anchors.margins: margin
-                
             }
         }
     }
