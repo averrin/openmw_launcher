@@ -5,13 +5,15 @@
     <title>OpenMW Launcher</title>
     <script src="/static/jquery-2.1.1.min.js"></script>
     <script src="/static/communication.js"></script>
+    <script src="/static/main.js"></script>
 </head>
 <body>
-<span id="title">Profiles</span>
+<h3 id="title">Profiles</h3>
 <select name="profiles" id="profiles">
     {{range .Profiles.List}}
         <option value="{{.}}">{{.}}</option>
     {{end}}
-</select>
+</select><br>
+<button id="play">Play</button>
 </body>
 </html>

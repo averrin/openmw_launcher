@@ -121,6 +121,7 @@ func main() {
 	thrustWindow := window.NewWindow("http://localhost:3000/", mysession)
 	thrustWindow.Show()
 	thrustWindow.Maximize()
+//	thrustWindow.OpenDevTools()
 	thrustWindow.Focus()
 
 	// NonBLOCKING - note in other examples this was blocking.

@@ -1,6 +1,7 @@
 $( document ).ready(function() {
     var c=new WebSocket('ws://localhost:3000/sock');
     c.onopen = function(){
+      window.socket = c
       send({Id: "0", Message: "", Type: "connect"})
       c.onmessage = function(response){
         var data = JSON.parse(response.data);
@@ -40,5 +41,6 @@ $( document ).ready(function() {
         console.log("send", data)
         c.send(JSON.stringify(data))
     }
+    
     
 })
